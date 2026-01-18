@@ -1,0 +1,60 @@
+services:
+  kafka:
+      image: confluentinc/cp-kafka:7.6.0
+      networks:
+        - big_data_net
+      ports:
+        - "9092:9092"   # PLAINTEXT (Docker <-> Docker)
+        - "9094:9094"   # PLAINTEXT_HOST (host <-> Docker)
+        - "9093:9093"   # CONTROLLER (internal, KRaft)
+      environment:
+        KAFKA_PROCESS_ROLES: broker,controller
+        KAFKA_NODE_ID: 1
+        KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+        KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+        KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+        KAFKA_LOG_DIRS: /tmp/kraft-logs
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+        KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+        CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+      restart: unless-stopped
+
+  akhq:
+    image: tchiotludo/akhq:0.26.0
+    networks:
+      - big_data_net
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./akhq/application.yml:/app/application.yml:ro
+
+  predictions-service:
+    image: predictions-service:latest
+    networks:
+      - big_data_net
+    ports:
+      - "${SERVICE_PREDICTIONS_PORT}:8000"
+    env_file:
+      - services_env/predictions-service.env
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  requests-service:
+    image: requests-service:latest
+    networks:
+      - big_data_net
+    ports:
+      - "${SERVICE_REQUESTS_PORT}:8000"
+    env_file:
+      - services_env/requests-service.env
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+networks:
+  big_data_net:
+    name: big_data
